@@ -210,3 +210,18 @@ def stylometry_signal(text: str) -> float:
 
     # Average both structural signals when sentence rhythm is measurable.
     return (variance_signal + ttr_signal) / 2
+
+
+def compute_confidence(llm_score: float, stylometry_score: float) -> float:
+    """
+    Combine Signal 1 and Signal 2 into a single AI-likelihood confidence score.
+
+    Returns a float in [0, 1] where higher = more likely AI-generated.
+    """
+    # Weighted average: the LLM reads text holistically (semantic + stylistic
+    # coherence), while stylometry only captures a narrower structural slice —
+    # so the LLM detector gets more influence (0.6 vs 0.4).
+    #
+    # These weights (0.6 / 0.4) are a documented design choice from planning.md,
+    # not empirically tuned on labeled data.
+    return (0.6 * llm_score) + (0.4 * stylometry_score)
