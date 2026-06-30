@@ -1,12 +1,15 @@
 """
 Provenance Guard — Flask API entry point.
 
-M3 scope: skeleton routes only. Detection signals are NOT wired into /submit yet.
+M3 scope: /submit uses Signal 1 (LLM detector) as the confidence score.
 """
 
 import uuid
 
 from flask import Flask, jsonify, request
+
+from signals import llm_detector
+from storage import get_log, log_submission
 
 # Create the Flask application instance.
 # __name__ tells Flask where to look for templates/static files (not used yet).
@@ -30,7 +33,7 @@ def submit():
             "creator_id": "<who submitted it>"
         }
 
-    For now this returns hardcoded placeholder values — real detection comes in M4.
+    Runs Signal 1 (LLM detector) and returns classification results.
     """
     # request.get_json() parses the POST body as JSON (returns None if missing/invalid).
     body = request.get_json(silent=True)
@@ -55,27 +58,40 @@ def submit():
             400,
         )
 
-    # --- Placeholder response (will be replaced once signals are wired in) ---
-    # content_id: unique ID for this submission (used later for appeals/audit log).
-    # attribution: who wrote it — placeholder until real classification runs.
-    # confidence: 0–1 probability the text is AI-generated (see planning.md).
-    # label: human-readable transparency string (see planning.md).
-    #
-    # creator_id is accepted but not used yet — it will tie submissions to creators
-    # when storage and appeals are added in M5.
-    _ = creator_id  # intentionally unused for now
+    # Signal 1: LLM-based probability that the text is AI-generated (0–1).
+    # M4 will combine this with stylometry; for now it IS the confidence score.
+    llm_score = llm_detector(text)
+
+    if llm_score >= 0.70:
+        attribution = "likely_ai"
+    elif llm_score <= 0.30:
+        attribution = "likely_human"
+    else:
+        attribution = "uncertain"
+
+    content_id = str(uuid.uuid4())
+    log_submission(
+        content_id=content_id,
+        creator_id=creator_id,
+        attribution=attribution,
+        confidence=llm_score,
+        llm_score=llm_score,
+    )
 
     return jsonify(
         {
-            "content_id": str(uuid.uuid4()),
-            "attribution": "uncertain",
-            "confidence": 0.5,
-            "label": (
-                "We are uncertain about the origin of this content "
-                "(Confidence: 50%). [placeholder]"
-            ),
+            "content_id": content_id,
+            "attribution": attribution,
+            "confidence": llm_score,
+            "label": f"Confidence this is AI-generated: {llm_score:.0%}",
         }
     )
+
+
+@app.route("/log", methods=["GET"])
+def log():
+    """Return recent audit log entries (newest first)."""
+    return jsonify({"entries": get_log()})
 
 
 # Run the dev server when this file is executed directly: `python app.py`
