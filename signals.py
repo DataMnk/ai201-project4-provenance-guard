@@ -8,6 +8,7 @@ Test standalone with: python -c "from signals import llm_detector; print(llm_det
 import logging
 import os
 import re
+import statistics
 
 from dotenv import load_dotenv
 from groq import Groq
@@ -166,3 +167,46 @@ def llm_detector(text: str) -> float:
             DEFAULT_LLM_SCORE,
         )
         return DEFAULT_LLM_SCORE
+
+
+def stylometry_signal(text: str) -> float:
+    """
+    Signal 2: structural AI-likelihood from sentence variance and vocabulary diversity.
+
+    Returns a float in [0, 1] where higher = more AI-like (same scale as llm_detector).
+    """
+    # Edge case: no analyzable words (empty/whitespace-only). We can't measure
+    # structure, so return 0.5 (neutral / uncertain) rather than crashing.
+    words = re.findall(r"\b\w+\b", text.lower())
+    if not words:
+        return 0.5
+
+    # --- Metric 2: type-token ratio (TTR) ---
+    ttr = len(set(words)) / len(words)
+    # Invert: rich vocabulary (high TTR, human-like) → low AI signal.
+    ttr_signal = 1.0 - ttr
+
+    # --- Metric 1: sentence length variation (coefficient of variation) ---
+    # Split on sentence-ending punctuation (. ! ?). Imperfect but sufficient here.
+    raw_sentences = re.split(r"[.!?]+", text)
+    sentences = [s.strip() for s in raw_sentences if s.strip()]
+
+    # Word count per sentence (reuse the same word tokenizer as TTR).
+    sentence_lengths = [len(re.findall(r"\b\w+\b", s.lower())) for s in sentences]
+    sentence_lengths = [n for n in sentence_lengths if n > 0]
+
+    # Fewer than 2 measurable sentences means we can't assess rhythm (no punctuation
+    # or only one sentence). Don't invent a variance of 0 — use TTR alone instead.
+    if len(sentence_lengths) < 2:
+        return ttr_signal
+
+    # Coefficient of variation (stdev / mean) normalizes for naturally long or
+    # short sentences, unlike raw variance on word counts.
+    mean_length = statistics.mean(sentence_lengths)
+    cv = statistics.stdev(sentence_lengths) / mean_length
+    normalized_cv = min(cv / 0.8, 1.0)
+    # Invert: high variation in rhythm (human-like) → low AI signal.
+    variance_signal = 1.0 - normalized_cv
+
+    # Average both structural signals when sentence rhythm is measurable.
+    return (variance_signal + ttr_signal) / 2
