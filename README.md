@@ -202,3 +202,6 @@ the API.
 
 Python 3.13, Flask, Groq API (`llama-3.3-70b-versatile`), Flask-Limiter,
 JSON-file audit log.
+
+## Video Walkthrough
+https://www.loom.com/share/9fe83ea50f9d45f6a81f558ad55a65d0
