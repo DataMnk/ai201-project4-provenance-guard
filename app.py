@@ -10,7 +10,7 @@ from flask import Flask, jsonify, request
 
 from labels import get_label
 from signals import compute_confidence, llm_detector, stylometry_signal
-from storage import get_log, log_submission
+from storage import get_log, log_appeal, log_submission
 
 # Create the Flask application instance.
 # __name__ tells Flask where to look for templates/static files (not used yet).
@@ -97,6 +97,49 @@ def submit():
 def log():
     """Return recent audit log entries (newest first)."""
     return jsonify({"entries": get_log()})
+
+
+@app.route("/appeal", methods=["POST"])
+def appeal():
+    """
+    Accept a creator appeal against a classification.
+
+    Expected JSON body:
+        {
+            "content_id": "<id from /submit response>",
+            "creator_reasoning": "<why the classification is wrong>"
+        }
+    """
+    body = request.get_json(silent=True)
+
+    if body is None:
+        return jsonify({"error": "Request body must be valid JSON"}), 400
+
+    content_id = body.get("content_id")
+    creator_reasoning = body.get("creator_reasoning")
+
+    missing = []
+    if not content_id or not isinstance(content_id, str):
+        missing.append("content_id")
+    if not creator_reasoning or not isinstance(creator_reasoning, str):
+        missing.append("creator_reasoning")
+
+    if missing:
+        return (
+            jsonify({"error": f"Missing or invalid required fields: {', '.join(missing)}"}),
+            400,
+        )
+
+    if not log_appeal(content_id, creator_reasoning):
+        return jsonify({"error": f"No submission found for content_id: {content_id}"}), 404
+
+    return jsonify(
+        {
+            "content_id": content_id,
+            "status": "under_review",
+            "message": "Appeal received and logged for review.",
+        }
+    )
 
 
 # Run the dev server when this file is executed directly: `python app.py`

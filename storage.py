@@ -52,3 +52,30 @@ def get_log(limit: int = 50) -> list:
     """Return the most recent log entries (newest first)."""
     entries = _read_log()
     return list(reversed(entries[-limit:]))
+
+
+def log_appeal(content_id: str, creator_reasoning: str) -> bool:
+    """Log an appeal and mark the original submission as under review."""
+    entries = _read_log()
+
+    original = None
+    for entry in entries:
+        if entry.get("content_id") == content_id and entry.get("event_type") != "appeal":
+            original = entry
+            break
+
+    if original is None:
+        return False
+
+    original["status"] = "under_review"
+    entries.append(
+        {
+            "content_id": content_id,
+            "event_type": "appeal",
+            "creator_reasoning": creator_reasoning,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "status": "under_review",
+        }
+    )
+    _write_log(entries)
+    return True
