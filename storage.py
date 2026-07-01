@@ -28,6 +28,7 @@ def log_submission(
     attribution: str,
     confidence: float,
     llm_score: float,
+    stylometry_score: float,
 ) -> None:
     """Append one classified submission to the audit log."""
     entries = _read_log()
@@ -39,6 +40,7 @@ def log_submission(
             "attribution": attribution,
             "confidence": confidence,
             "llm_score": llm_score,
+            "stylometry_score": stylometry_score,
             "status": "classified",
         }
     )

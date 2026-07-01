@@ -1,14 +1,14 @@
 """
 Provenance Guard — Flask API entry point.
 
-M3 scope: /submit uses Signal 1 (LLM detector) as the confidence score.
+M4 scope: /submit combines both signals via compute_confidence.
 """
 
 import uuid
 
 from flask import Flask, jsonify, request
 
-from signals import llm_detector
+from signals import compute_confidence, llm_detector, stylometry_signal
 from storage import get_log, log_submission
 
 # Create the Flask application instance.
@@ -33,7 +33,7 @@ def submit():
             "creator_id": "<who submitted it>"
         }
 
-    Runs Signal 1 (LLM detector) and returns classification results.
+    Runs both detection signals and returns combined classification results.
     """
     # request.get_json() parses the POST body as JSON (returns None if missing/invalid).
     body = request.get_json(silent=True)
@@ -58,13 +58,13 @@ def submit():
             400,
         )
 
-    # Signal 1: LLM-based probability that the text is AI-generated (0–1).
-    # M4 will combine this with stylometry; for now it IS the confidence score.
     llm_score = llm_detector(text)
+    stylometry_score = stylometry_signal(text)
+    confidence = compute_confidence(llm_score, stylometry_score)
 
-    if llm_score >= 0.70:
+    if confidence >= 0.70:
         attribution = "likely_ai"
-    elif llm_score <= 0.30:
+    elif confidence <= 0.30:
         attribution = "likely_human"
     else:
         attribution = "uncertain"
@@ -74,16 +74,17 @@ def submit():
         content_id=content_id,
         creator_id=creator_id,
         attribution=attribution,
-        confidence=llm_score,
+        confidence=confidence,
         llm_score=llm_score,
+        stylometry_score=stylometry_score,
     )
 
     return jsonify(
         {
             "content_id": content_id,
             "attribution": attribution,
-            "confidence": llm_score,
-            "label": f"Confidence this is AI-generated: {llm_score:.0%}",
+            "confidence": confidence,
+            "label": f"Confidence this is AI-generated: {confidence:.0%}",
         }
     )
 
