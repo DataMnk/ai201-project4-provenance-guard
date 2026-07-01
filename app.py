@@ -7,6 +7,8 @@ M4 scope: /submit combines both signals via compute_confidence.
 import uuid
 
 from flask import Flask, jsonify, request
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 from labels import get_label
 from signals import compute_confidence, llm_detector, stylometry_signal
@@ -16,6 +18,10 @@ from storage import get_log, log_appeal, log_submission
 # __name__ tells Flask where to look for templates/static files (not used yet).
 app = Flask(__name__)
 
+# Rate limits: 10/minute lets a creator submit several pieces in one session;
+# 100/day caps total volume per IP so one client can't flood the Groq API.
+limiter = Limiter(get_remote_address, app=app, default_limits=[], storage_uri="memory://")
+
 
 @app.route("/health", methods=["GET"])
 def health():
@@ -24,6 +30,7 @@ def health():
 
 
 @app.route("/submit", methods=["POST"])
+@limiter.limit("10 per minute;100 per day")
 def submit():
     """
     Accept creator text for classification.
@@ -100,6 +107,7 @@ def log():
 
 
 @app.route("/appeal", methods=["POST"])
+@limiter.limit("10 per minute;100 per day")
 def appeal():
     """
     Accept a creator appeal against a classification.
