@@ -8,6 +8,7 @@ import uuid
 
 from flask import Flask, jsonify, request
 
+from labels import get_label
 from signals import compute_confidence, llm_detector, stylometry_signal
 from storage import get_log, log_submission
 
@@ -70,6 +71,7 @@ def submit():
         attribution = "uncertain"
 
     content_id = str(uuid.uuid4())
+    status = "classified"
     log_submission(
         content_id=content_id,
         creator_id=creator_id,
@@ -77,6 +79,7 @@ def submit():
         confidence=confidence,
         llm_score=llm_score,
         stylometry_score=stylometry_score,
+        status=status,
     )
 
     return jsonify(
@@ -84,7 +87,8 @@ def submit():
             "content_id": content_id,
             "attribution": attribution,
             "confidence": confidence,
-            "label": f"Confidence this is AI-generated: {confidence:.0%}",
+            "label": get_label(confidence),
+            "status": status,
         }
     )
 
